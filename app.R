@@ -17,6 +17,7 @@ library(knitr)
 qb_stats <- read.csv("Quarterback_Stats.csv", stringsAsFactors = F,header = TRUE)
 qb_stats$Current_Team <- as.factor((qb_stats$Current_Team))
 qb_stats$Players <- as.factor((qb_stats$Player))
+qb_stats <- arrange(qb_stats, qb_stats$Year, qb_stats$Players)
 
 
 ui <- dashboardPage(title = 'Title Goes Here', 
@@ -58,16 +59,21 @@ ui <- dashboardPage(title = 'Title Goes Here',
                       tabsetPanel(id = "tabs",
                                   tabPanel(title = "Main Dashboard",
                                            value = "page1",
-                                           fluidRow(valueBoxOutput("value1"),
-                                                    valueBoxOutput("value2"),
-                                                    valueBoxOutput("value3")
-                                                   ),
-                                           fluidRow(column(width = 6,plotlyOutput("TouchdownsbyQtr")),
-                                                    column(width = 6,plotlyOutput("YardsbyQtr"))
-                                                   )
+                                           fluidRow(
+                                             valueBoxOutput("value1"),
+                                             valueBoxOutput("value2"),
+                                             valueBoxOutput("value3")
+                                           ),
+                                           fluidRow(
+                                             column(width = 6, plotlyOutput("TouchdownsbyQtr")),
+                                             column(width = 6, plotlyOutput("YardsbyQtr"))
+                                           ),
+                                           fluidRow(
+                                             DT::dataTableOutput("data_table")  # Add the data table output here
                                            )
                                   )
-                                         )
+                      )
+                    )
                     , skin='blue'
                     
                   )
@@ -76,88 +82,73 @@ ui <- dashboardPage(title = 'Title Goes Here',
 
 
 server <- function(input, output) {
-
-
+  
   base_stats <- reactive({
-    
-      res <- qb_stats %>% 
+    res <- qb_stats %>% 
       filter(Players == input$Players)
-      if (input$Players != "") res <- filter(res, Players == input$Players)
-      res
-    
-    
+    if (input$Players != "") res <- filter(res, Players == input$Players)
+    res
   })
   
-  
   base_data <- reactive({
-    
     res <- qb_stats %>% 
       filter(Players == input$Players, Year == input$Years)
     if (input$Players != "") res <- filter(res, Players == input$Players)
     res
-    
   })
-
+  
   output$value1 <- renderValueBox({
-    
-      base_data() %>%
+    base_data() %>%
       group_by(Players, Year) %>%
       summarise(value = sum(TD)) %>%
       pull() %>%
       as.integer() %>%
-      valueBox(icon = icon("table"), color = "light-blue",subtitle = "Touchdowns") 
-    
+      valueBox(icon = icon("table"), color = "light-blue", subtitle = "Touchdowns") 
   })
   
-
   output$value2 <- renderValueBox({
-    
-      base_data() %>%
+    base_data() %>%
       group_by(Players, Year) %>%
       summarise(value = sum(Yds)) %>%
       pull() %>%
       as.integer() %>%
-      valueBox(icon = icon("table"), color = "purple",subtitle = "Yards") 
-    
+      valueBox(icon = icon("table"), color = "purple", subtitle = "Yards") 
   })
   
-
   output$value3 <- renderValueBox({
-    
-      base_data() %>%
+    base_data() %>%
       group_by(Players, Year) %>%
       summarise(value = sum(Sk)) %>%
       pull() %>%
       as.integer() %>%
-      valueBox(icon = icon("table"), color = "teal",subtitle = "Sacks") 
-    
+      valueBox(icon = icon("table"), color = "teal", subtitle = "Sacks") 
   })
   
-  
-  
-
   output$TouchdownsbyQtr <- renderPlotly({
-
-      ggplot(data = base_stats(), 
-                  aes(x=Year, y=TD, fill=factor(Tm))) +
-        geom_bar(position = "dodge",stat = "identity") + ylab("Touchdowns") + 
-        xlab("Year") + theme(legend.position="bottom", 
-                             plot.title = element_text(size=15, face="bold")) + 
-        ggtitle("Touchdowns by Quarterback") + labs(fill = "Tm")
-      
-         
-                                        })
-
+    ggplot(data = base_stats(), aes(x = Year)) +
+      geom_line(aes(y = `Cmp.`, color = "Completion Percentage"), size = 1.5) +
+      geom_point(aes(y = `Cmp.`, color = "Completion Percentage")) +
+      geom_line(aes(y = QBR, color = "QBR"), size = 1.5) +
+      geom_point(aes(y = QBR, color = "QBR")) +
+      ylab("Percentage / Rating") +
+      xlab("Year") +
+      theme(legend.position = "bottom", 
+            plot.title = element_text(size = 15, face = "bold")) +
+      ggtitle("Completion Percentage and QBR by Year") +
+      scale_color_manual(values = c("Completion Percentage" = "blue", "QBR" = "magenta")) +
+      labs(color = "Metric")
+  })
   
   output$YardsbyQtr <- renderPlotly({
-    
-    ggplot(data = base_stats(), 
-                aes(x=Year, y=Yds, fill=factor(Tm))) + 
-      geom_bar(position = "dodge",stat = "identity") + ylab("Yards") + 
-      xlab("Year") + theme(legend.position="bottom" 
-                           ,plot.title = element_text(size=15, face="bold")) + 
-      ggtitle("Yards by Quarterback") + labs(fill = "Tm")
-    
+    ggplot(data = base_stats(), aes(x = Year)) +
+      geom_bar(aes(y = Yds, fill = factor(Tm)), position = "dodge", stat = "identity") +
+      scale_y_continuous(name = "Yards") +  # Only primary Y axis for Yds
+      ylab("Yards") +
+      xlab("Year") +
+      theme(legend.position = "bottom", 
+            plot.title = element_text(size = 15, face = "bold")) +
+      ggtitle("Yards by Quarterback") +
+      labs(fill = "Tm")
   })
   
   output$download_data <- downloadHandler(
@@ -167,6 +158,10 @@ server <- function(input, output) {
       write.csv(data, file, row.names = FALSE)
     }
   )
-
+  
+  output$data_table <- DT::renderDataTable({
+    base_data()
+  })
 }
-  shinyApp(ui, server)
+
+shinyApp(ui, server)
