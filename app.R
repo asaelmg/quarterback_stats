@@ -14,11 +14,9 @@ library(r2d3)
 library(nycflights13)
 library(knitr)
 
-qb_stats <- read.csv("Quarterback_Stats.csv", stringsAsFactors = F,header = TRUE)
-qb_stats$Current_Team <- as.factor((qb_stats$Current_Team))
-qb_stats$Players <- as.factor((qb_stats$Player))
-qb_stats <- arrange(qb_stats, qb_stats$Year, qb_stats$Players)
-
+qb_stats <- read.csv("Quarterback_Stats.csv", stringsAsFactors = FALSE, header = TRUE)
+qb_stats$Current_Team <- as.factor(qb_stats$Current_Team)
+qb_stats <- arrange(qb_stats, qb_stats$Year, qb_stats$Player)
 
 ui <- dashboardPage(title = 'Title Goes Here', 
                     
@@ -29,30 +27,27 @@ ui <- dashboardPage(title = 'Title Goes Here',
                       width = 250,
                       sidebarMenu(
                         menuItem("Dashboard", tabName = "dashboard", icon = icon("home"))
-                                 ),
+                      ),
                       
                       selectInput(
-                        inputId = "Players",
+                        inputId = "Player",
                         label = "Players",
-                        choices = unique(c(qb_stats$Players)),
+                        choices = unique(qb_stats$Player),
                         selected = "Russell Wilson",
                         selectize = FALSE
-                                 ),
-
+                      ),
+                      
                       selectInput(
                         inputId = "Years",
                         label = "Years",
-                        choices = unique(c(qb_stats$Year)),
+                        choices = unique(qb_stats$Year),
                         selected = "2023",
                         selectize = FALSE
                       ),
                       
-                      
                       downloadButton(outputId = "download_data", label = "Download", width = 4)
                       
-                                               ), 
-                    
-
+                    ), 
                     
                     # The body of the dashboard
                     body <- dashboardBody(
@@ -73,33 +68,37 @@ ui <- dashboardPage(title = 'Title Goes Here',
                                            )
                                   )
                       )
-                    )
-                    , skin='blue'
-                    
-                  )
-
-
-
+                    ),
+                    skin = 'blue'
+)
 
 server <- function(input, output) {
   
   base_stats <- reactive({
     res <- qb_stats %>% 
-      filter(Players == input$Players)
-    if (input$Players != "") res <- filter(res, Players == input$Players)
+      filter(Player == input$Player)
+    if (input$Player != "") res <- filter(res, Player == input$Player)
     res
   })
   
   base_data <- reactive({
     res <- qb_stats %>% 
-      filter(Players == input$Players, Year == input$Years)
-    if (input$Players != "") res <- filter(res, Players == input$Players)
+      filter(Player == input$Player, Year == input$Years)
+    if (input$Player != "") res <- filter(res, Player == input$Player)
+    res
+  })
+  
+  
+  base_data2 <- reactive({
+    res <- qb_stats %>% 
+      filter(Player == input$Player)
+    if (input$Player != "") res <- filter(res, Player == input$Player)
     res
   })
   
   output$value1 <- renderValueBox({
     base_data() %>%
-      group_by(Players, Year) %>%
+      group_by(Player, Year) %>%
       summarise(value = sum(TD)) %>%
       pull() %>%
       as.integer() %>%
@@ -108,7 +107,7 @@ server <- function(input, output) {
   
   output$value2 <- renderValueBox({
     base_data() %>%
-      group_by(Players, Year) %>%
+      group_by(Player, Year) %>%
       summarise(value = sum(Yds)) %>%
       pull() %>%
       as.integer() %>%
@@ -117,7 +116,7 @@ server <- function(input, output) {
   
   output$value3 <- renderValueBox({
     base_data() %>%
-      group_by(Players, Year) %>%
+      group_by(Player, Year) %>%
       summarise(value = sum(Sk)) %>%
       pull() %>%
       as.integer() %>%
@@ -160,7 +159,7 @@ server <- function(input, output) {
   )
   
   output$data_table <- DT::renderDataTable({
-    base_data()
+    base_data2()
   })
 }
 
